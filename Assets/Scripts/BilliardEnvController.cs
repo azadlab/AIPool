@@ -87,13 +87,13 @@ public class BilliardEnvController : MonoBehaviour
                 rb = ball.GetComponent<Rigidbody>();
             
             var rbVelocity = rb.velocity;
-            if (isMoving && rbVelocity.magnitude < 0.1f)
+            if (isMoving && rbVelocity.magnitude < 0.3f)
             {
                 //If All Balls have stopped Moving
                 if(++ballCount == Balls.Count)
                     isMoving = false;
             }
-            else if (!isMoving && rbVelocity.magnitude > 0.1f)
+            else if (!isMoving && rbVelocity.magnitude > 0.3f)
             {
                 //Balls are moving
                 isMoving = true;
