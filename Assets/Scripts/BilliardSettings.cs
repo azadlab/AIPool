@@ -3,7 +3,7 @@ using UnityEngine;
 public class BilliardSettings : MonoBehaviour
 {
     
-    public float agentVelocity = 0;
+    public float agentVelocity = 2.0f;
     
     public Material GoalMaterial;
     

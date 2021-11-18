@@ -28,17 +28,23 @@ public class BilliardAgent : Agent
     public float laserWidth = 0.1f;
     public float laserMaxLength = 5f;
 
-    public List<GameObject> Balls = new List<GameObject>();
+    public List<GameObject> Balls;
+    public List<GameObject> Pockets;
 
+    public AudioSource audioPlayer;
     void Start()
     {
-        envController = table.GetComponent<BilliardEnvController>();
+
     }
 
     public override void Initialize()
     {
         billiardSettings = FindObjectOfType<BilliardSettings>();
         behaviorParameters = gameObject.GetComponent<BehaviorParameters>();
+        envController = table.GetComponent<BilliardEnvController>();
+        Balls = envController.Balls;
+        Pockets = envController.Pockets;
+        audioPlayer = GetComponent<AudioSource>();
 
         foreach (var ball in Balls)
         {
@@ -59,6 +65,7 @@ public class BilliardAgent : Agent
 
         meter_pos = meter_arrow.transform.localPosition.x;
         meter_cur_pos = meter_pos;
+
     }
 
     /// <summary>
@@ -91,10 +98,16 @@ public class BilliardAgent : Agent
             if (this.gameObject.CompareTag("whiteBall"))
             {
                 Debug.Log("White Ball Pocketed");
-                envController.ResetScene();
+                //envController.ResetScene();
+                envController.ResolveEvent(Event.WhiteBallPocketed);
             }
         }
-
+        if (c.gameObject.CompareTag("ball") && !envController.hasPlayedSound)
+        {
+            //audioPlayer.Play();
+            envController.hasPlayedSound = true;
+            envController.ResolveEvent(Event.HitBall);
+        }
 
     }
 
@@ -106,15 +119,8 @@ public class BilliardAgent : Agent
 
         if (!envController.isMoving)
         {
-            //envController.ResetStick();
-            //transform.Rotate(transform.up * rot_angle);
-
-            //MoveTowards(wball.transform.position, agentRb, agentVelocity, 5);
-
             envController.isMoving = true;
-            //apply the y rotation to the global 'forward' vector3 to get the
-            //forward vector direction that our sphere is moving in
-            Vector3 newForward = Quaternion.AngleAxis(rot_angle, Vector3.up) * Vector3.forward.normalized;
+            Vector3 newForward = Quaternion.AngleAxis(rot_angle, Vector3.up) * Vector3.right.normalized;
             agentRb.AddForce(agentVelocity * newForward, ForceMode.VelocityChange);
 
         }
@@ -125,57 +131,79 @@ public class BilliardAgent : Agent
 
     public override void CollectObservations(VectorSensor sensor)
     {
-
-        // Agent velocity (2 floats)
-        //sensor.AddObservation(agentRb.velocity.x);
-        //sensor.AddObservation(agentRb.velocity.z);
-
-
+        // Adding Position of Balls
         foreach (var ball in Balls)
         {
-            
-            if(ball.CompareTag("whiteBall"))
+
+            if (ball.CompareTag("whiteBall"))
             {
                 sensor.AddObservation(transform.position.x);
-                sensor.AddObservation(transform.position.z);   
+                sensor.AddObservation(transform.position.z);
             }
             else
             {
                 sensor.AddObservation(ball.transform.position.x);
                 sensor.AddObservation(ball.transform.position.z);
             }
-            
+
+        }
+        // Adding Position of Pockets
+        foreach (var pocket in Pockets)
+        {
+
+            sensor.AddObservation(pocket.transform.position.x);
+            sensor.AddObservation(pocket.transform.position.z);
+
         }
     }
 
+    public Vector3 GetNearestBall()
+    {
+        Vector3 nearest = Vector3.zero;
+        float dist = 1000000.0f;
+        float aux_dist = 0.0f;
+        foreach (var ball in Balls)
+        {
+            if (ball.gameObject.CompareTag("whiteBall"))
+                continue;
+            var npos = ball.transform.localPosition;
+
+            aux_dist = (npos - transform.localPosition).magnitude;
+            if (aux_dist < dist)
+            {
+                dist = aux_dist;
+                nearest = npos;
+            }
+        }
+        return nearest;
+    }
 
     void FireRay(float angle)
     {
-        Vector3 shoot_dir = Quaternion.AngleAxis(angle, Vector3.up) * Vector3.forward.normalized;
+        Vector3 shoot_dir = Quaternion.AngleAxis(angle, Vector3.up) * Vector3.right.normalized;
         Vector3 pos = transform.position;
         Ray ray = new Ray(pos, shoot_dir);
 
         RaycastHit hitData;
 
-        
-        
-        if(Physics.Raycast(ray, out hitData))
+
+        if (Physics.Raycast(ray, out hitData))
         {
             lr.SetPosition(0, ray.origin);
             lr.SetPosition(1, hitData.point);
             //Debug.Log("Collided with:"+hitData.collider.tag);
         }
-        if(envController.isMoving)
+        if (envController.isMoving)
         {
-            lr.SetPosition(1,ray.origin);
+            lr.SetPosition(1, ray.origin);
         }
-       
+
         //Debug.DrawRay(ray.origin, ray.direction*100);
-                
+
     }
 
-    public float ray_angle  = 0.5f;
-    public float shot_velocity  = 0.0f;
+    public float ray_angle = 0.5f;
+    public float shot_velocity = 0.0f;
     public GameObject meter_arrow;
 
     public float meter_pos = 0.0f;
@@ -183,7 +211,9 @@ public class BilliardAgent : Agent
 
     public float angle_step = 0.01f;
     public float force_step = 0.2f;
-    public float meter_display_step = 3.2f;
+    public float meter_display_step = 20f;
+
+    public bool init_shot = true;
     // For human controller
     public override void Heuristic(in ActionBuffers actionsOut)
     {
@@ -218,23 +248,34 @@ public class BilliardAgent : Agent
             shot_velocity -= force_step;
             meter_cur_pos -= meter_display_step;
         }
-        if(shot_velocity>1) shot_velocity=1;
-        if(shot_velocity<0) shot_velocity=0;
+        if (shot_velocity > 1) shot_velocity = 1;
+        if (shot_velocity < 0) shot_velocity = 0;
 
-        if(ray_angle > 1)
+        if (init_shot && !envController.isMoving)
+        {
+            init_shot = false;
+            Vector3 nball_pos = GetNearestBall();
+            ray_angle = Mathf.Atan2((nball_pos.z - transform.localPosition.z), (nball_pos.x - transform.localPosition.x));
+            ray_angle = -1 * ray_angle / Mathf.PI;
+        }
+
+        if (ray_angle > 1)
             ray_angle = ray_angle - 2;
-        if(ray_angle < -1)
+        if (ray_angle < -1)
             ray_angle = 2 + ray_angle;
         FireRay(ray_angle * 180);
 
         continuousActionsOut[0] = ray_angle;
 
-        if (continuousActionsOut[0] != 0 && Input.GetKey(KeyCode.Space))
+        if (Input.GetKey(KeyCode.Space))
+        {
             continuousActionsOut[1] = shot_velocity;
+            init_shot = true;
+        }
 
-        
+
         if (meter_cur_pos < meter_pos) meter_cur_pos = meter_pos;
-        if (meter_cur_pos > -1*meter_pos) meter_cur_pos = -1*meter_pos;
+        if (meter_cur_pos > -1 * meter_pos) meter_cur_pos = -1 * meter_pos;
 
         Vector3 t_pos;
         if (meter_arrow != null)

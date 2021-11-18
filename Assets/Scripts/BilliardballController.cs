@@ -19,19 +19,16 @@ public class BilliardballController : MonoBehaviour
     /// <summary>
     /// Detects whether the ball lands in the goal pockets or out of bounds
     /// </summary>
-    void OnTriggerEnter(Collider other)
+    void OnCollisionEnter(Collision col)
     {
 
-        if(other.gameObject.CompareTag("boundary"))
+        if(col.gameObject.CompareTag("wall"))
         {
             envController.ResolveEvent(Event.HitOutOfBounds);
             
         }
         
-        else if(other.gameObject.CompareTag("Pocket"))
-        {
-            envController.ResolveEvent(Event.HitGoal);
-        }
+        
         
         
     }

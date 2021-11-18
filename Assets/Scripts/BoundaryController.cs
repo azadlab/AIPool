@@ -3,11 +3,11 @@ using UnityEngine;
 public class BoundaryController : MonoBehaviour
 {
     public GameObject bAgent;
-
+    public BilliardEnvController envController;
     void Start()
     {
 
-
+        envController = GetComponentInParent<BilliardEnvController>();
     }
 
 
@@ -34,7 +34,7 @@ public class BoundaryController : MonoBehaviour
             bAgent.transform.localPosition = new Vector3(randomPosX, PosY, randomPosZ);
         }
         
-            
+        envController.ResolveEvent(Event.HitOutOfBounds);
 
 
     }

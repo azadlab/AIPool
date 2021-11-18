@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using Unity.MLAgents;
 using UnityEngine;
+ using UnityEngine.UI;
 
 
 public enum ballType
@@ -11,12 +12,20 @@ public enum ballType
 }
 public enum Event
 {
-    HitGoal = 0,
-    HitOutOfBounds = 1
+    HitPocket = 0,
+
+    HitBall = 1,
+    HitOutOfBounds = 2,
+    WhiteBallPocketed = 3,
+    LeftPocket = 4,
+    EndGame = 5
 }
+
+
 
 public class BilliardEnvController : MonoBehaviour
 {
+    public int BallsInPockets=0;
     public BilliardAgent bAgent;
     Rigidbody bAgentRb;
     public GameObject wball;
@@ -39,6 +48,7 @@ public class BilliardEnvController : MonoBehaviour
 
     List<Renderer> RenderersList = new List<Renderer>();
     public List<GameObject> Balls = new List<GameObject>();
+    public List<GameObject> Pockets = new List<GameObject>();
 
     public bool UseRandomAgentRotation = true;
     public bool UseRandomAgentPosition = true;
@@ -50,6 +60,11 @@ public class BilliardEnvController : MonoBehaviour
     private int m_ResetTimer;
     public int MaxEnvironmentSteps;
     BilliardSettings billiardSettings;
+    public List<string> balls_in_pocket;
+
+    public Text status;
+    public static bool IsTraining = true;
+    private float score = 0.0f;
 
     void Start()
     {
@@ -63,11 +78,18 @@ public class BilliardEnvController : MonoBehaviour
         billiardSettings = FindObjectOfType<BilliardSettings>();
 
         wballRb = wball.GetComponent<Rigidbody>();
-
-        //ResetScene();
+        balls_in_pocket = new List<string>();
+        
+        if(IsTraining)
+            status = GameObject.Find("TrainingStatus/"+this.name).GetComponent<Text>();
+        else
+            status = GameObject.Find("StatusBoard/status").GetComponent<Text>();
+    
+        
     }
 
     public bool isMoving = false;
+    public bool hasPlayedSound = false;
     void FixedUpdate()
     {
         m_ResetTimer += 1;
@@ -103,6 +125,13 @@ public class BilliardEnvController : MonoBehaviour
             }
         }
 
+        if(!isMoving && hasPlayedSound)
+            hasPlayedSound = false;
+
+        if(BallsInPockets >= Balls.Count-1)
+            ResolveEvent(Event.EndGame);
+
+        status.text = this.name+":Balls="+(Balls.Count-BallsInPockets-1)+",Score="+score;
 
     }
 
@@ -130,12 +159,12 @@ public class BilliardEnvController : MonoBehaviour
     }
 
 
-    public void ResetStick()
+    /*public void ResetStick()
     {
         int rot_angle = Random.Range(0, 360);
         bAgent.transform.Rotate(bAgent.transform.up * rot_angle);
         bAgent.transform.position = wball.transform.position + bAgent.transform.forward * -1f;
-    }
+    }*/
 
     private int resetTimer;
     /// <summary>
@@ -172,25 +201,33 @@ public class BilliardEnvController : MonoBehaviour
         {
             case Event.HitOutOfBounds:
 
+                bAgent.AddReward(-1f);
+                score-=1f;
+            break;
 
-                // end episode
-                bAgent.EndEpisode();
-
-                ResetScene();
-                break;
-
-            case Event.HitGoal:
-                // blue wins
+            case Event.HitPocket:
+                // scored
                 bAgent.AddReward(1f);
+                score+=1f;
+            break;
+            case Event.HitBall:
+                // Encourage to hit the ball
+                bAgent.AddReward(0.01f);
+                score+=0.01f;
+            break;
+            case Event.EndGame:
 
-                // turn floor blue
-                StartCoroutine(GoalScoredSwapGroundMaterial(m_GroundMaterial, RenderersList, .5f));
-
-                // end episode
-                
                 bAgent.EndEpisode();
-                //ResetScene();
-                break;
+                ResetScene();
+            break;
+            case Event.WhiteBallPocketed:
+                bAgent.AddReward(-0.5f);
+                score-=0.5f;
+            break;
+            case Event.LeftPocket:
+                bAgent.AddReward(-1f);
+                score-=1f;
+            break;
         }
     }
 
