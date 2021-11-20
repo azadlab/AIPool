@@ -1,3 +1,5 @@
+#define USE_AUTOSHOTS
+
 using UnityEngine;
 using Unity.MLAgents;
 using Unity.MLAgents.Sensors;
@@ -5,6 +7,8 @@ using Unity.MLAgents.Actuators;
 using Unity.MLAgents.Policies;
 using System.Collections;
 using System.Collections.Generic;
+
+
 
 public class BilliardAgent : Agent
 {
@@ -93,14 +97,16 @@ public class BilliardAgent : Agent
     /// </summary>
     void OnCollisionEnter(Collision c)
     {
+        var randomPosX = Random.Range(-100f, 100f);
+        var randomPosZ = Random.Range(-30f, 30f);
+        var PosY = 82.0f;
+
         if (c.gameObject.CompareTag("Pocket"))
         {
-            if (this.gameObject.CompareTag("whiteBall"))
-            {
-                Debug.Log("White Ball Pocketed");
-                //envController.ResetScene();
-                envController.ResolveEvent(Event.WhiteBallPocketed);
-            }
+            Debug.Log(envController.name + ":White Ball in the pocket, Spitting out...");
+            envController.ResolveEvent(Event.WhiteBallPocketed);
+            transform.localPosition = new Vector3(randomPosX, PosY, randomPosZ);
+
         }
         if (c.gameObject.CompareTag("ball") && !envController.hasPlayedSound)
         {
@@ -108,7 +114,12 @@ public class BilliardAgent : Agent
             envController.hasPlayedSound = true;
             envController.ResolveEvent(Event.HitBall);
         }
-
+        if (c.gameObject.CompareTag("wall"))
+        {
+            Debug.Log(envController.name + ":White Ball out of boundary");
+            transform.localPosition = new Vector3(randomPosX, PosY, randomPosZ);
+            envController.ResolveEvent(Event.HitOutOfBounds);
+        }
     }
 
 
@@ -137,13 +148,13 @@ public class BilliardAgent : Agent
 
             if (ball.CompareTag("whiteBall"))
             {
-                sensor.AddObservation(transform.position.x);
-                sensor.AddObservation(transform.position.z);
+                sensor.AddObservation(transform.localPosition.x);
+                sensor.AddObservation(transform.localPosition.z);
             }
             else
             {
-                sensor.AddObservation(ball.transform.position.x);
-                sensor.AddObservation(ball.transform.position.z);
+                sensor.AddObservation(ball.transform.localPosition.x);
+                sensor.AddObservation(ball.transform.localPosition.z);
             }
 
         }
@@ -151,8 +162,8 @@ public class BilliardAgent : Agent
         foreach (var pocket in Pockets)
         {
 
-            sensor.AddObservation(pocket.transform.position.x);
-            sensor.AddObservation(pocket.transform.position.z);
+            sensor.AddObservation(pocket.transform.localPosition.x);
+            sensor.AddObservation(pocket.transform.localPosition.z);
 
         }
     }
@@ -251,13 +262,26 @@ public class BilliardAgent : Agent
         if (shot_velocity > 1) shot_velocity = 1;
         if (shot_velocity < 0) shot_velocity = 0;
 
-        if (init_shot && !envController.isMoving)
+        /*if (init_shot && !envController.isMoving)
         {
             init_shot = false;
             Vector3 nball_pos = GetNearestBall();
             ray_angle = Mathf.Atan2((nball_pos.z - transform.localPosition.z), (nball_pos.x - transform.localPosition.x));
             ray_angle = -1 * ray_angle / Mathf.PI;
+        }*/
+
+#if USE_AUTOSHOTS
+        if (!envController.isMoving)
+        {
+            Vector3 shot = CalculateShot();
+            shot_velocity = shot.magnitude;
+            shot = shot / shot.magnitude;
+            ray_angle = Mathf.Atan2(shot.z, shot.x);
+            ray_angle = -1 * ray_angle / Mathf.PI;
+            //Debug.Log("Shot.x="+shot.x+",Shot.z="+shot.z);
+            //Debug.Log("ray_angle="+ray_angle+",velocity="+shot_velocity);
         }
+#endif
 
         if (ray_angle > 1)
             ray_angle = ray_angle - 2;
@@ -266,6 +290,8 @@ public class BilliardAgent : Agent
         FireRay(ray_angle * 180);
 
         continuousActionsOut[0] = ray_angle;
+
+
 
         if (Input.GetKey(KeyCode.Space))
         {
@@ -284,6 +310,86 @@ public class BilliardAgent : Agent
             t_pos.x = meter_cur_pos;
             meter_arrow.transform.localPosition = t_pos;
         }
+
+    }
+
+
+    public Vector3 CalculateShot()
+    {
+        List<Vector3> shots = new List<Vector3>();
+        List<Vector3> pocket_lines = new List<Vector3>();
+        List<float> angles = new List<float>();
+
+
+        foreach (var pocket in Pockets)
+        {
+            Vector3 pocket_pos = pocket.transform.localPosition;
+            Vector3 line = pocket_pos - transform.localPosition;
+            pocket_lines.Add(line);  // Draw lines from cue ball to all the pockets
+
+            float aux_angle = 0.0f, angle = Mathf.PI;
+            Vector3 nearest_shot = Vector3.zero;
+            foreach (var ball in Balls)
+            {
+                if (ball.gameObject.CompareTag("whiteBall"))
+                    continue;
+                if (envController.balls_in_pocket.Contains(ball.name))
+                    continue;
+
+                // Find which ball is the nearest to each pocket line
+                Vector3 ball_pos = ball.transform.localPosition;
+                Vector3 shot = ball_pos - transform.localPosition;
+                float dir = Vector3.Dot(shot / shot.magnitude, line / line.magnitude);
+                if (dir < 0)   //If Ball and Pocket are not in the same direction
+                    continue;
+                aux_angle = Mathf.Acos(dir);
+                if (Mathf.Abs(aux_angle) < angle)
+                {
+                    angle = aux_angle;
+                    nearest_shot = shot;
+                }
+
+            }
+            shots.Add(nearest_shot);
+            angles.Add(angle);
+        }
+
+        // Best shot is the one with the minimum angle from the pocket lines
+        float min_angle = Mathf.PI;
+        int idx = 0;
+        for (int i = 0; i < shots.Count; i++)
+        {
+            if (Mathf.Abs(angles[i]) < min_angle)
+            {
+                min_angle = angles[i];
+                idx = i;
+            }
+        }
+
+        // Find the correction for spin
+        float dir1 = Mathf.Atan2(shots[idx].z, shots[idx].x);
+        float dir2 = Mathf.Atan2(pocket_lines[idx].z, pocket_lines[idx].x);
+
+        if (dir1 > dir2 && (dir1 > 0))     //If Ball is Left of pocket line , it means it has to be hit little bit to the right side
+            min_angle = -1f * min_angle;  //Unity has positive in Clockwise direction!
+        if (dir1 > dir2 && (dir1 < 0))     //If Ball is left of pocket line
+            min_angle = -1f * min_angle;
+        Debug.Log("Ball Angle:"+(dir1*180)/Mathf.PI);
+        Debug.Log("Line Angle:"+(dir2*180)/Mathf.PI);
+        envController.status.text = "Taking Shot for Pocket "+(idx+1);
+        Vector3 best_shot = shots[idx];
+        best_shot = best_shot / best_shot.magnitude;
+        float spin_angle = (min_angle * 180) / Mathf.PI;
+        spin_angle = spin_angle / 10.0f;
+        spin_angle = Mathf.Clamp(spin_angle, -3, 3);
+        Debug.Log("Spin Angle=" + spin_angle);
+        best_shot = Quaternion.AngleAxis(spin_angle, Vector3.up) * best_shot;
+        Vector3 table_diag = Pockets[0].transform.localPosition - Pockets[3].transform.localPosition;
+        float max_dist = table_diag.magnitude;
+        
+        
+        float velocity = pocket_lines[idx].magnitude / max_dist;
+        return velocity * (best_shot);
 
     }
 }

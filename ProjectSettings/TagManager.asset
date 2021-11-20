@@ -11,6 +11,7 @@ TagManager:
   - table
   - boundary
   - playSurface
+  - wall
   layers:
   - Default
   - TransparentFX

@@ -63,7 +63,7 @@ public class BilliardEnvController : MonoBehaviour
     public List<string> balls_in_pocket;
 
     public Text status;
-    public static bool IsTraining = true;
+    public static bool IsTraining = false;
     private float score = 0.0f;
 
     void Start()
@@ -131,7 +131,7 @@ public class BilliardEnvController : MonoBehaviour
         if(BallsInPockets >= Balls.Count-1)
             ResolveEvent(Event.EndGame);
 
-        status.text = this.name+":Balls="+(Balls.Count-BallsInPockets-1)+",Score="+score;
+        //status.text = this.name+":Balls="+(Balls.Count-BallsInPockets-1)+",Score="+score;
 
     }
 
@@ -187,7 +187,9 @@ public class BilliardEnvController : MonoBehaviour
                ball.transform.localPosition = new Vector3(randomPosX, PosY, randomPosZ);
            
         }
-
+        BallsInPockets = 0;
+        balls_in_pocket = new List<string>();
+        score = 0;
         //ResetStick();
 
     }
@@ -203,30 +205,35 @@ public class BilliardEnvController : MonoBehaviour
 
                 bAgent.AddReward(-1f);
                 score-=1f;
+                bAgent.EndEpisode();
             break;
 
             case Event.HitPocket:
                 // scored
                 bAgent.AddReward(1f);
                 score+=1f;
+                bAgent.EndEpisode();
             break;
             case Event.HitBall:
                 // Encourage to hit the ball
                 bAgent.AddReward(0.01f);
                 score+=0.01f;
+                bAgent.EndEpisode();
             break;
             case Event.EndGame:
-
+                Debug.Log("Game Ended for "+this.name);
                 bAgent.EndEpisode();
                 ResetScene();
             break;
             case Event.WhiteBallPocketed:
                 bAgent.AddReward(-0.5f);
                 score-=0.5f;
+                bAgent.EndEpisode();
             break;
             case Event.LeftPocket:
                 bAgent.AddReward(-1f);
                 score-=1f;
+                bAgent.EndEpisode();
             break;
         }
     }

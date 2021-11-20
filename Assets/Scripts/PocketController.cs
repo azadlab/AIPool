@@ -35,27 +35,18 @@ public class PocketController : MonoBehaviour
             { 
                 envController.balls_in_pocket.Add(collision.gameObject.name);
                 envController.BallsInPockets++;
-                Debug.Log("Total Balls in Pocket="+envController.BallsInPockets);
                 envController.ResolveEvent(Event.HitPocket);
-                
+                Debug.Log(envController.name+": Ball in the Pocket");
             }
         }
-        else
-        if(collision.gameObject.CompareTag("whiteBall") || collision.gameObject.CompareTag("agent"))
-        {
-            Debug.Log("White Ball in the pocket, Spitting out...");
-            var randomPosX = Random.Range(-100f, 100f);
-            var randomPosZ = Random.Range(-30f, 30f);
-            var PosY = 82.0f;
-            bAgent.transform.localPosition = new Vector3(randomPosX, PosY, randomPosZ);
-        }
+        
         
         
     }
 
     void OnCollisionExit(Collision collision)
     {
-        if(collision.gameObject.CompareTag("ball"))
+        /*if(collision.gameObject.CompareTag("ball"))
         {
             
             if(envController.balls_in_pocket.Contains(collision.gameObject.name))
@@ -63,10 +54,10 @@ public class PocketController : MonoBehaviour
                     envController.BallsInPockets--;
                     envController.balls_in_pocket.Remove(collision.gameObject.name);
                     envController.ResolveEvent(Event.LeftPocket);
-                    Debug.Log("Ball No Longer in the Pocket");
+                    Debug.Log(envController.name+":Ball No Longer in the Pocket");
             }
                 
-        }
+        }*/
     }
 
 
