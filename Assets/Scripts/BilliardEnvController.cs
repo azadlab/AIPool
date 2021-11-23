@@ -79,7 +79,7 @@ public class BilliardEnvController : MonoBehaviour
 
         wballRb = wball.GetComponent<Rigidbody>();
         balls_in_pocket = new List<string>();
-        
+        bAgentRb = bAgent.GetComponent<Rigidbody>();
         if(IsTraining)
             status = GameObject.Find("TrainingStatus/"+this.name).GetComponent<Text>();
         else
@@ -113,16 +113,23 @@ public class BilliardEnvController : MonoBehaviour
             {
                 //If All Balls have stopped Moving
                 if(++ballCount == Balls.Count)
-                    isMoving = false;
+                    {
+                        isMoving = false;
+                        
+                    }
             }
             else if (!isMoving && rbVelocity.magnitude > 0.3f)
             {
                 //Balls are moving
                 isMoving = true;
-                //bAgent.transform.position = new Vector3(0.7f,0.05f,0.5f);
-                //bAgent.transform.eulerAngles = new Vector3(0,0,0);
                 break;
             }
+        }
+        if(!isMoving && ballCount>=Balls.Count)  //Resetting the velocity and orientation when stopped
+        {
+            bAgentRb.velocity = Vector3.zero;
+            bAgentRb.angularVelocity = Vector3.zero;
+            bAgentRb.transform.rotation = Quaternion.identity;
         }
 
         if(!isMoving && hasPlayedSound)
@@ -131,10 +138,18 @@ public class BilliardEnvController : MonoBehaviour
         if(BallsInPockets >= Balls.Count-1)
             ResolveEvent(Event.EndGame);
 
-        //status.text = this.name+":Balls="+(Balls.Count-BallsInPockets-1)+",Score="+score;
-
+        //status.text = this.name+":Balls="+(Balls.Count-BallsInPockets-1)+",Score="+10*BallsInPockets;
+        status.text = "Balls="+(Balls.Count-BallsInPockets-1)+",Score="+10*BallsInPockets;
+        //bAgent.transform.rotation = Quaternion.Euler(0,0,0);
     }
 
+    void Update()
+    {
+        if(!isMoving)
+            bAgent.HandleManualControl();
+        if(Input.GetKeyDown(KeyCode.Escape))
+            Application.Quit();
+    }
 
     /// <summary>
     /// Changes the color of the ground for a moment.
